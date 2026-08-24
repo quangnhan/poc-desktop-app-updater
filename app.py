@@ -14,7 +14,7 @@ import zipfile
 from tkinter import messagebox
 from urllib.request import Request, urlopen
 
-APP_VERSION = "1.0.0"  # sua so nay moi lan release
+APP_VERSION = "1.0.1"  # sua so nay moi lan release
 RELEASE_API = "https://api.github.com/repos/quangnhan/poc-desktop-app-updater/releases/latest"
 
 
