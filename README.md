@@ -14,8 +14,8 @@ app.exe (bản cũ, trong folder cài đặt) khởi động
   → gọi GitHub API /releases/latest, so sánh tag_name với APP_VERSION
   → nếu có bản mới: dialog chỉ có nút OK (chặn hoàn toàn UI chính)
   → OK: tải app.zip mới → giải nén ra folder app_new\ (nằm CẠNH folder cài đặt)
-  → ghi updater.bat vào %TEMP%, chạy nó độc lập, rồi app cũ sys.exit()
-  → updater.bat: lặp rmdir folder cũ đến khi xóa sạch (đợi app thoát hết lock)
+  → ghi %TEMP%\poc_updater.bat, chạy nó độc lập, rồi app cũ sys.exit()
+  → poc_updater.bat: lặp rmdir folder cũ đến khi xóa sạch (đợi app thoát hết lock)
       → move app_new\ vào thay chỗ folder cũ
       → start app.exe (giờ là bản mới) → tự xóa chính nó
   → app.exe bản mới hiển thị version mới

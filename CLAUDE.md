@@ -27,7 +27,8 @@ progress bar/checksum, không refactor cho đẹp, không dùng thư viện upda
    (hardcode ở đầu file — mỗi lần release chỉ sửa số này).
 2. Có bản mới → dialog bắt buộc (chỉ nút OK) → `do_update()`:
    - Tải asset **tên đúng là `app.zip`** → giải nén ra `app_new\` **cạnh** folder cài đặt.
-   - Ghi `updater.bat` (generate động bằng string, path nhúng cứng) vào `%TEMP%`.
+   - Ghi `%TEMP%\poc_updater.bat` (generate động bằng string, path nhúng cứng;
+     tên có tiền tố `poc_` vì %TEMP% là thư mục dùng chung, tránh đụng tên app khác).
    - Chạy bat với `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, `cwd=%TEMP%`, rồi `sys.exit(0)`.
    - Bat: lặp `rmdir /s /q` folder cũ đến khi xóa sạch (đợi app thoát hết file lock)
      → `move` `app_new\` vào thay → `start` app.exe mới → tự xóa (`del "%~f0"`).
