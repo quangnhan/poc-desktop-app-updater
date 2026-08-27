@@ -21,14 +21,19 @@ progress bar/checksum, không refactor cho đẹp, không dùng thư viện upda
 - **Repo PHẢI để public** — app gọi GitHub API không có token; repo private thì
   check update thất bại im lặng (rơi vào `except` trong `check_update`).
 
-## Cơ chế update (toàn bộ nằm trong `app.py`, ~110 dòng)
+## Cơ chế update (nằm trong `updater.py` — module tách rời, copy sang project khác được; `app.py` chỉ gọi `check_update()`)
 
 1. Khởi động: gọi `GET /repos/.../releases/latest`, so `tag_name` với `APP_VERSION`
    (hardcode ở đầu file — mỗi lần release chỉ sửa số này).
 2. Có bản mới → dialog bắt buộc (chỉ nút OK) → `do_update()`:
-   - Tải asset **tên đúng là `app.zip`** → giải nén ra `app_new\` **cạnh** folder cài đặt.
-   - Ghi `%TEMP%\poc_updater.bat` (generate động bằng string, path nhúng cứng;
-     tên có tiền tố `poc_` vì %TEMP% là thư mục dùng chung, tránh đụng tên app khác).
+   - Tải asset **tên đúng là `app.zip`** → giải nén ra `<tên exe>_new\` **cạnh** folder cài đặt.
+   - Ghi `%TEMP%\<tên exe>_updater.bat` (generate động bằng string, path nhúng cứng;
+     tên tạm derive từ basename của exe vì `%TEMP%` và folder cha đều là thư mục dùng
+     chung — 2 app cùng nhúng module này mà cài cạnh nhau sẽ đụng tên, xóa folder của nhau).
+   - Bat ghi bằng **UTF-8 không BOM** + dòng đầu `chcp 65001 >nul`: cmd.exe decode .bat
+     theo codepage hiện hành (mặc định OEM cp437/850, không biểu diễn được tiếng Việt),
+     path có dấu sẽ méo → `rmdir`/`move` trỏ sai chỗ đúng lúc app đã thoát. BOM thì
+     hỏng dòng `@echo off` (đã test cả 4 encoding, chỉ cách này chạy đúng).
    - Chạy bat với `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, `cwd=%TEMP%`, rồi `sys.exit(0)`.
    - Bat: lặp `rmdir /s /q` folder cũ đến khi xóa sạch (đợi app thoát hết file lock)
      → `move` `app_new\` vào thay → `start` app.exe mới → tự xóa (`del "%~f0"`).

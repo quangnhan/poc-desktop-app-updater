@@ -8,6 +8,18 @@ Copy file nay sang project khac va goi:
 Goi check_update() truoc khi dung tkinter mainloop chinh. Neu co ban moi,
 ham nay se hien dialog bat buoc + progress bar tai ve, roi tu thoat app
 (khong return) de bat script thay the folder va khoi dong lai ban moi.
+
+Gia dinh BAT BUOC (khong thoa man -> check_update tu bo qua hoac update fail):
+- Windows only (dung cmd.exe + creationflags rieng cua Windows).
+- Build bang PyInstaller ONEDIR (co folder "_internal" canh exe). Onefile bi
+  bo qua co chu dich - xem guard trong check_update.
+- Goi TRUOC khi tao Tk() chinh cua app: module nay tu tao/destroy root rieng.
+- Ten exe phai giu nguyen qua cac ban release: bat khoi dong lai dung path exe
+  cu, doi --name giua 2 version thi app khong tu mo lai duoc.
+- Thu muc CHA cua folder cai dat phai ghi duoc (folder moi giai nen ra do).
+  Cai vao C:\\Program Files thi can quyen admin.
+- Asset trong release phai la 1 zip chua NOI DUNG folder build o root zip
+  (exe o root, khong boc them 1 lop folder).
 """
 
 import json
@@ -59,13 +71,19 @@ def _do_update(release, asset_name, on_progress, app_dir=None, exe_path=None):
     exe_path = exe_path or sys.executable
     app_dir = app_dir or os.path.dirname(exe_path)
     parent = os.path.dirname(app_dir)
+    # Ten tam duoc derive tu ten exe (khong hardcode "app_new"/"poc_updater.bat"):
+    # %TEMP% va parent la thu muc dung chung - 2 app cung nhung module nay ma cai
+    # canh nhau se tranh cung 1 ten -> xoa folder cua nhau.
+    slug = os.path.splitext(os.path.basename(exe_path))[0]
     # folder moi phai nam NGOAI app_dir, vi app_dir sap bi xoa nguyen cum
-    new_dir = os.path.join(parent, "app_new")
-    zip_path = os.path.join(parent, "app_new.zip")
+    new_dir = os.path.join(parent, f"{slug}_new")
+    zip_path = os.path.join(parent, f"{slug}_new.zip")
 
-    url = next(
-        a["browser_download_url"] for a in release["assets"] if a["name"] == asset_name
-    )
+    # next(...) tran StopIteration khi thieu asset -> message rong tren dialog loi
+    assets = {a["name"]: a["browser_download_url"] for a in release["assets"]}
+    if asset_name not in assets:
+        raise RuntimeError(f"Release {release['tag_name']} khong co asset {asset_name}")
+    url = assets[asset_name]
     _download_with_progress(url, zip_path, on_progress)
 
     shutil.rmtree(new_dir, ignore_errors=True)
@@ -76,10 +94,16 @@ def _do_update(release, asset_name, on_progress, app_dir=None, exe_path=None):
     # Generate updater.bat vao %TEMP%. Can process phu vi Windows lock exe/dll
     # cua process dang chay -> app khong the tu xoa/ghi de folder cua chinh no.
     # Bat phai nam NGOAI folder bi xoa, neu khong no tu xoa chinh minh giua chung.
-    bat_path = os.path.join(tempfile.gettempdir(), "poc_updater.bat")
-    with open(bat_path, "w") as f:
+    bat_path = os.path.join(tempfile.gettempdir(), f"{slug}_updater.bat")
+    # Ghi UTF-8 (KHONG BOM - co BOM thi dong "@echo off" bi hong) + "chcp 65001"
+    # ngay dau bat: cmd.exe decode file .bat theo codepage hien hanh, mac dinh la
+    # OEM (cp437/850) khong bieu dien duoc ky tu tieng Viet -> path co dau (vd
+    # C:\Users\Nhan\...) bi meo, rmdir/move tro sai cho dung luc app da tu thoat.
+    # chcp doi codepage cho CA cac dong doc sau no, nen 2 dong dau phai la ASCII.
+    with open(bat_path, "w", encoding="utf-8") as f:
         f.write(
             "@echo off\n"
+            "chcp 65001 >nul\n"
             ":wait\n"
             "ping -n 2 127.0.0.1 >nul\n"
             f'rmdir /s /q "{app_dir}" 2>nul\n'
@@ -112,14 +136,22 @@ def _run_update_with_progress_ui(release, asset_name, app_dir=None, exe_path=Non
     # Tai o thread rieng - main thread chi ve UI qua vong lap after(), khong bi
     # block boi network I/O. Cap nhat truc tiep widget tu thread khac khong an
     # toan trong Tkinter, nen worker chi ghi vao "state", main thread doc va ve.
-    state = {"done": 0, "total": 0, "finished": False}
+    state = {"done": 0, "total": 0, "finished": False, "error": None}
 
     def on_progress(done, total):
         state["done"] = done
         state["total"] = total
 
     def worker():
-        _do_update(release, asset_name, on_progress, app_dir=app_dir, exe_path=exe_path)
+        # Phai bat exception: neu worker chet (release thieu asset dung ten, mang
+        # dut, parent khong ghi duoc) ma khong set "finished" thi poll() chay vo
+        # han -> cua so treo o 0%, khong dong duoc, user khong biet chuyen gi.
+        try:
+            _do_update(
+                release, asset_name, on_progress, app_dir=app_dir, exe_path=exe_path
+            )
+        except Exception as e:
+            state["error"] = e
         state["finished"] = True
 
     def poll():
@@ -127,6 +159,13 @@ def _run_update_with_progress_ui(release, asset_name, app_dir=None, exe_path=Non
         pct = int(state["done"] * 100 / total) if total else 0
         bar["value"] = pct
         pct_label.config(text=f"{pct}%")
+        if state["error"] is not None:
+            # showerror TRUOC destroy: goi khi khong con root nao song thi tkinter
+            # phai tu tao root tam, de sinh chuyen la.
+            e = state["error"]
+            messagebox.showerror("Update failed", f"{type(e).__name__}: {e}", parent=win)
+            win.destroy()
+            os._exit(1)
         if state["finished"]:
             # sys.exit() trong callback tkinter bi report_callback_exception
             # nuot mat, nen thoat process truc tiep - bat da chay doc lap roi.
@@ -143,12 +182,20 @@ def check_update(app_version, repo, asset_name=ASSET_NAME):
     qua, vi khong co folder cai dat nao de thay the)."""
     if not getattr(sys, "frozen", False):
         return
+    # Chi ho tro PyInstaller ONEDIR. Voi onefile, sys.executable nam o thu muc bat
+    # ky (Desktop, Downloads...) -> app_dir se la thu muc do va bat se rmdir /s /q
+    # ca thu muc do. Nhan dien onedir bang su ton tai cua "_internal".
+    if not os.path.isdir(os.path.join(os.path.dirname(sys.executable), "_internal")):
+        return
     try:
         release = _get_latest_release(repo)
+        # parse_version phai nam trong try: tag kieu "v1.2-beta" hay "release-3"
+        # se raise ValueError -> crash app ngay luc khoi dong.
+        latest = release["tag_name"]
+        newer = parse_version(latest) > parse_version(app_version)
     except Exception:
-        return  # khong co mang / repo private / chua co release -> cho dung tam
-    latest = release["tag_name"]
-    if parse_version(latest) > parse_version(app_version):
+        return  # khong co mang / repo private / chua release / tag la -> dung tam
+    if newer:
         # Dialog chi co nut OK -> ep buoc update, khong cho vao UI chinh
         root = tk.Tk()
         root.withdraw()
