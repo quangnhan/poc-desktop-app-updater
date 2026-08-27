@@ -83,6 +83,40 @@ Chạy lại `D:\test-update\app\app.exe` (bản 1.0.0):
 - Mở sẵn `D:\test-update\` trước khi bấm OK để quan sát: folder `app_new\` xuất hiện,
   folder `app\` biến mất rồi được thay bằng folder mới.
 
+## Module `updater.py` (dùng lại cho project khác)
+
+Toàn bộ logic update nằm trong `updater.py` — file độc lập, copy sang project khác
+là dùng được ngay:
+
+```python
+from updater import check_update
+
+check_update(app_version="1.0.2", repo="owner/repo")  # goi truoc mainloop() chinh
+```
+
+`app.py` chỉ còn khai báo `APP_VERSION`, `REPO` rồi gọi hàm trên.
+
+## Debug nhanh, không cần build lại
+
+Test flow tải + progress bar + giải nén + bat thay thế mà không cần PyInstaller build
+hay publish release mới mỗi lần — dùng `debug_force_update()`, bỏ qua hoàn toàn check
+`sys.frozen` và so sánh version, luôn lấy Release mới nhất hiện có trên repo:
+
+```powershell
+New-Item -ItemType Directory .debug_test\app -Force
+Copy-Item C:\Windows\System32\notepad.exe .debug_test\app\app.exe
+python -c "from updater import debug_force_update as f; f('quangnhan/poc-desktop-app-updater', '.debug_test/app', '.debug_test/app/app.exe')"
+```
+
+- `.debug_test\app` là folder giả lập "thư mục cài đặt", nằm trong repo nhưng đã được
+  thêm vào `.gitignore`.
+- `notepad.exe` chỉ đóng vai `app.exe` giả để bat script có gì để `start` ở bước cuối
+  (thấy Notepad tự mở lên = bat chạy đúng).
+- ⚠️ `app_dir` truyền vào (`.debug_test/app`) sẽ bị `rmdir /s /q` xóa sạch mỗi lần chạy —
+  không được trỏ vào thư mục chứa source code hay `python.exe` thật.
+- Chạy lại lệnh trên nhiều lần tùy ý để test lại từ đầu, không cần bump `APP_VERSION`
+  hay tạo Release mới.
+
 ## Ghi chú
 
 - Chạy `python app.py` trực tiếp (chưa đóng gói) sẽ bỏ qua check update, vì không có
