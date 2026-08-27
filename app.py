@@ -11,7 +11,7 @@ import tkinter as tk
 
 from updater import check_update
 
-APP_VERSION = "1.0.4"  # sua so nay moi lan release
+APP_VERSION = "1.0.6"  # sua so nay moi lan release
 REPO = "quangnhan/poc-desktop-app-updater"
 
 

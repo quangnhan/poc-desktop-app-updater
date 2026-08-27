@@ -88,9 +88,12 @@ def _do_update(release, asset_name, on_progress, app_dir=None, exe_path=None):
             f'start "" "{exe_path}"\n'
             'del "%~f0"\n'
         )
+    # CREATE_NO_WINDOW (khong phai DETACHED_PROCESS) - vi cmd.exe van tu cap phat
+    # console rieng cho no du process bi "detach" khoi console cha, gay nhap
+    # nhay 1 cua so den ngay sau progress bar.
     subprocess.Popen(
         ["cmd", "/c", bat_path],
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
         cwd=tempfile.gettempdir(),
     )
 
@@ -173,5 +176,9 @@ def debug_force_update(repo, app_dir, exe_path, asset_name=ASSET_NAME):
         copy C:\\Windows\\System32\\notepad.exe .debug_test\\app\\app.exe
         python -c "from updater import debug_force_update as f; f('owner/repo', '.debug_test/app', '.debug_test/app/app.exe')"
     """
+    # bat chay voi cwd=%TEMP%, nen path phai la absolute - neu khong "start" o
+    # buoc cuoi se resolve nham theo %TEMP% thay vi thu muc goc cua ban.
+    app_dir = os.path.abspath(app_dir)
+    exe_path = os.path.abspath(exe_path)
     release = _get_latest_release(repo)
     _run_update_with_progress_ui(release, asset_name, app_dir=app_dir, exe_path=exe_path)
